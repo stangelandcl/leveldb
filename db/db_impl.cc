@@ -820,11 +820,28 @@ Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
     s = iter->status();
     delete iter;
     if (s.ok()) {
-      Log(options_.info_log,
-          "Generated table #%llu: %lld keys, %lld bytes",
-          (unsigned long long) output_number,
-          (unsigned long long) current_entries,
-          (unsigned long long) current_bytes);
+        Log(options_.info_log,
+            "Generated table #%llu@%d: %lld keys, %lld bytes",
+            (unsigned long long) output_number,
+            compact->compaction->level(),
+            (unsigned long long) current_entries,
+            (unsigned long long) current_bytes);
+
+  		// Writing current_bytes to disk is considered no expense(cost no time),
+  		// so we calculate how many IOs will match the compaction speed,
+  		// then sleep 1s/IOs
+  		// Added by me@ideawu.com
+  		int mbs = current_bytes/1024/1024;
+  		if(options_.compaction_speed > 0 && mbs > 1){
+  			int count = options_.compaction_speed/mbs;
+  			if(count < 1){
+  				count = 1;
+  			}
+  			int pause = 1000 * 1000 / count;
+  			Log(options_.info_log, "compaction_speed: %d MB, pause: %d us",
+  				options_.compaction_speed, pause);
+  			env_->SleepForMicroseconds(pause);
+  		}
     }
   }
   return s;
